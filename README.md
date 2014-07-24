@@ -7,7 +7,7 @@ Floki is Express-like framework based on the source code of Martini and Gin fram
 * Modular design
 * Middleware support
 * Performance (uses httprouter for routing, avoids use of reflection everywhere possible)
-* Support for gin launcher
+* Support for [gin](github.com/codegangsta/gin) live code reloader
 * Environments support
 
 ## Modules
