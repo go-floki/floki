@@ -3,7 +3,6 @@ package floki
 import (
 	"github.com/julienschmidt/httprouter"
 	//"html/template"
-	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -33,7 +32,8 @@ type (
 		contextPool sync.Pool
 		router      *httprouter.Router
 		handlers404 []HandlerFunc
-		config      map[string]*json.RawMessage
+
+		Config ConfigMap
 	}
 
 	// Used internally to configure router, a RouterGroup is associated with a prefix
@@ -74,12 +74,12 @@ func (f *Floki) loadConfig() {
 		logger.Println("using config file:", configFile)
 	}
 
-	err := loadConfig(configFile, &f.config)
+	err := loadConfig(configFile, &f.Config)
 	if err != nil {
 		logger.Fatal(err)
 	}
 
-	f.logger.Println("loaded config:", f.config["AppRoot"])
+	f.logger.Println("loaded config:", f.Config.Str("appRoot", "./app/"))
 }
 
 // ServeHTTP is the HTTP Entry point for a Floki instance. Useful if you want to control your own HTTP server.
@@ -114,12 +114,12 @@ func (f *Floki) Run() {
 	}
 }
 
-func (m *Floki) GetParameter(key string) interface{} {
-	return m.params[key]
+func (f *Floki) GetParameter(key string) interface{} {
+	return f.params[key]
 }
 
-func (m *Floki) SetParameter(key string, value interface{}) {
-	m.params[key] = value
+func (f *Floki) SetParameter(key string, value interface{}) {
+	f.params[key] = value
 }
 
 func (f *Floki) createContext(w http.ResponseWriter, req *http.Request, params httprouter.Params, handlers []HandlerFunc) *Context {
@@ -138,31 +138,27 @@ func (f *Floki) createContext(w http.ResponseWriter, req *http.Request, params h
 // Classic creates a classic Floki with some basic default middleware - floki.Logger, floki.Recovery and floki.Static.
 // Classic also maps floki.Routes as a service.
 func Default() *Floki {
-	m := New()
+	f := New()
 
-	m.loadConfig()
+	f.loadConfig()
 
 	if Env == Dev {
-		m.Use(Logger())
+		f.Use(Logger())
 
-		if boolValue(m.config["EnableProfiling"]) {
-			RegisterProfiler(m)
+		if f.Config.Bool("enableProfiling", false) {
+			RegisterProfiler(f)
 		}
 	}
 
-	m.Use(Recovery())
+	f.Use(Recovery())
 
-	return m
+	return f
 }
 
 // Handler can be any callable function. Floki attempts to inject services into the handler's argument list.
 // Floki will panic if an argument could not be fullfilled via dependency injection.
 type Handler interface {
 	ServeHTTP(Context)
-}
-
-func (f *Floki) Config() map[string]*json.RawMessage {
-	return f.config
 }
 
 func (f *Floki) handle404(w http.ResponseWriter, req *http.Request) {

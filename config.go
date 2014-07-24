@@ -6,24 +6,15 @@ import (
 	"io/ioutil"
 )
 
-// Load gets your config from the json file,
-// and fills your struct with the option
-func loadConfig(filename string, o *map[string]*json.RawMessage) error {
-	b, err := ioutil.ReadFile(filename)
-	if err == nil {
-		err = json.Unmarshal(b, &o)
-
-		fmt.Println(o)
-
-		return err
-	}
-
-	return err
+type ConfigMap struct {
+	data map[string]*json.RawMessage
 }
 
-func boolValue(v *json.RawMessage) bool {
+func (c ConfigMap) Bool(key string, defaultValue bool) bool {
+	v := c.data[key]
+
 	if v == nil {
-		return false
+		return defaultValue
 	}
 
 	var b bool
@@ -31,13 +22,41 @@ func boolValue(v *json.RawMessage) bool {
 	return b
 }
 
-func stringValue(v *json.RawMessage) string {
+func (c ConfigMap) Int(key string, defaultValue int) int {
+	v := c.data[key]
+
 	if v == nil {
-		return ""
+		return defaultValue
 	}
 
-	var b string
-	json.Unmarshal(*v, &b)
+	var i int
+	json.Unmarshal(*v, &i)
+	return i
+}
 
-	return b
+func (c ConfigMap) Str(key string, defaultValue string) string {
+	v := c.data[key]
+
+	if v == nil {
+		return defaultValue
+	}
+
+	var s string
+	json.Unmarshal(*v, &s)
+	return s
+}
+
+// Load gets your config from the json file,
+// and fills your struct with the option
+func loadConfig(filename string, o *ConfigMap) error {
+	b, err := ioutil.ReadFile(filename)
+	if err == nil {
+		err = json.Unmarshal(b, &o.data)
+
+		fmt.Println(o)
+
+		return err
+	}
+
+	return err
 }
