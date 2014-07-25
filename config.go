@@ -46,8 +46,20 @@ func (c ConfigMap) Str(key string, defaultValue string) string {
 	return s
 }
 
-// Load gets your config from the json file,
-// and fills your struct with the option
+func (c ConfigMap) Map(key string) ConfigMap {
+	v := c.data[key]
+
+	if v == nil {
+		return nil
+	}
+
+	var m map[string]*json.RawMessage
+	json.Unmarshal(*v, &m)
+	return ConfigMap{m}
+}
+
+// loadConfig gets your config from the json file,
+// and returns resulting ConfigMap
 func loadConfig(filename string, o *ConfigMap) error {
 	b, err := ioutil.ReadFile(filename)
 	if err == nil {
