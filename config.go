@@ -50,7 +50,7 @@ func (c ConfigMap) Map(key string) ConfigMap {
 	v := c.data[key]
 
 	if v == nil {
-		return nil
+		return ConfigMap{make(map[string]*json.RawMessage)}
 	}
 
 	var m map[string]*json.RawMessage
