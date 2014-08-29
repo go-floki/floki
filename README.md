@@ -3,7 +3,7 @@
 Floki is Express-like framework based on the source code of Martini and Gin frameworks. It is currently undergoing heavy development. So things will change.
 
 ## Features
-* Jade-like templates with live reloading
+* Jade templates with live reloading
 * Modular design
 * Middleware support
 * Performance (uses httprouter for routing, avoids use of reflection everywhere possible)
