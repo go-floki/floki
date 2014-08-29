@@ -12,6 +12,8 @@ import (
 	"sync"
 )
 
+var appEventHandlers map[string][]AppEventHandler = make(map[string][]AppEventHandler)
+
 type (
 	// Used internally to collect errors that occurred during an http request.
 	errorMsg struct {
@@ -23,6 +25,8 @@ type (
 	errorMsgs []errorMsg
 
 	Model map[string]interface{}
+
+	AppEventHandler func(app *Floki)
 
 	// Floki represents the top level web application. inject.Injector methods can be invoked to map services on a global level.
 	Floki struct {
@@ -66,6 +70,8 @@ func New() *Floki {
 func (f *Floki) loadConfig() {
 	logger := f.logger
 
+	f.triggerAppEvent("ConfigureAppStart")
+
 	var configFile string
 	flag.StringVar(&configFile, "config", "../app/config/"+Env+".json", "Specify application config file to use")
 	flag.Parse()
@@ -78,6 +84,8 @@ func (f *Floki) loadConfig() {
 	if err != nil {
 		logger.Fatal(err)
 	}
+
+	f.triggerAppEvent("ConfigureAppEnd")
 
 	f.logger.Println("loaded config:", f.Config.Str("appRoot", "./app/"))
 }
@@ -96,7 +104,7 @@ func (f *Floki) Run() {
 	}
 
 	tplDir := f.GetParameter("views dir").(string)
-	f.SetParameter("templates", compileTemplates(tplDir, logger))
+	f.SetParameter("templates", f.compileTemplates(tplDir, logger))
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -144,10 +152,10 @@ func Default() *Floki {
 
 	if Env == Dev {
 		f.Use(Logger())
+	}
 
-		if f.Config.Bool("enableProfiling", false) {
-			RegisterProfiler(f)
-		}
+	if f.Config.Bool("enableProfiling", false) {
+		RegisterProfiler(f)
 	}
 
 	f.Use(Recovery())
@@ -162,13 +170,43 @@ type Handler interface {
 }
 
 func (f *Floki) handle404(w http.ResponseWriter, req *http.Request) {
-	/*handlers := f.combineHandlers(engine.handlers404)
+	handlers := f.combineHandlers(f.handlers404)
 	c := f.createContext(w, req, nil, handlers)
 	c.Writer.setStatus(404)
 	c.Next()
+
 	if !c.Writer.Written() {
-		c.Data(404, MIMEPlain, []byte("404 page not found"))
+		c.Send(404, "<html><body><h1>Error 404</h1><p>Page not found</p></body></html>")
 	}
-	engine.cache.Put(c)
-	*/
+
+	f.contextPool.Put(c)
+
+}
+
+func RegisterAppEventHandler(event string, handler AppEventHandler) {
+	handlers, exists := appEventHandlers[event]
+
+	if exists {
+		handlers = append(handlers, handler)
+	} else {
+		handlers = make([]AppEventHandler, 8)
+		handlers = append(handlers[0:0], handler)
+	}
+
+	appEventHandlers[event] = handlers
+
+}
+
+func (f *Floki) Logger() *log.Logger {
+	return f.logger
+}
+
+func (f *Floki) triggerAppEvent(event string) {
+	handlers, exists := appEventHandlers[event]
+	if exists {
+		for idx := range handlers {
+			f.logger.Println("trigger handler", idx, "of event", event, handlers)
+			handlers[idx](f)
+		}
+	}
 }

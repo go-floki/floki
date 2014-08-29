@@ -58,6 +58,22 @@ func (c ConfigMap) Map(key string) ConfigMap {
 	return ConfigMap{m}
 }
 
+func (c ConfigMap) Keys() []string {
+	var keys []string
+	for k := range c.data {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+func (c ConfigMap) EachMap(iterator func(key string, value ConfigMap)) {
+	for k := range c.data {
+		var m map[string]*json.RawMessage
+		json.Unmarshal(*c.data[k], &m)
+		iterator(k, ConfigMap{m})
+	}
+}
+
 // loadConfig gets your config from the json file,
 // and returns resulting ConfigMap
 func loadConfig(filename string, o *ConfigMap) error {

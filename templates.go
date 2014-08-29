@@ -1,7 +1,7 @@
 package floki
 
 import (
-	"github.com/eknkc/amber"
+	"github.com/go-floki/jade"
 	"github.com/howeyc/fsnotify"
 	"html/template"
 	"log"
@@ -14,24 +14,35 @@ import (
 var templatesData struct {
 	compiledTemplates map[string]*template.Template
 	directory         string
-	compileOptions    amber.Options
+	compileOptions    jade.Options
 }
 
-func compileTemplates(templatesDir string, logger *log.Logger) map[string]*template.Template {
-	var compileOptions amber.Options
+func (f *Floki) compileTemplates(templatesDir string, logger *log.Logger) map[string]*template.Template {
+	var compileOptions jade.Options
 
 	if Env == Prod {
-		compileOptions = amber.Options{true, true}
+		compileOptions = jade.Options{true, true}
 	} else {
-		compileOptions = amber.Options{false, false}
+		compileOptions = jade.Options{false, false}
 	}
 
 	//
-	templates, err := amber.CompileDir(templatesDir, amber.DefaultDirOptions, compileOptions)
+	templates, err := jade.CompileDir(templatesDir, jade.DefaultDirOptions, compileOptions)
 	if err != nil {
 		logger.Printf("Error compiling templates in %s\n", templatesDir)
 		panic(err)
 	}
+
+	// register tags
+	/*
+		tagsI := f.GetParameter("_tags")
+		if tagsI != nil {
+			tags := tagsI.(template.FuncMap)
+			for _, template := range templates {
+				template.Funcs(tags)
+			}
+		}
+	*/
 
 	templatesData.compiledTemplates = templates
 	templatesData.directory = templatesDir
@@ -40,13 +51,13 @@ func compileTemplates(templatesDir string, logger *log.Logger) map[string]*templ
 	logger.Printf("compiled templates in %s\n", templatesDir)
 
 	if Env == Dev {
-		WatchTemplates(templatesDir)
+		f.watchTemplates(templatesDir)
 	}
 
 	return templates
 }
 
-func WatchTemplates(templatesDir string) {
+func (f *Floki) watchTemplates(templatesDir string) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		log.Fatal(err)
@@ -91,24 +102,37 @@ func WatchTemplates(templatesDir string) {
 							// check if file mtime was updated since last time
 							if secondsGone.Seconds() > 0.0 {
 								name := strings.Replace(ev.Name, templatesData.directory, "", 1)
-								name = strings.Replace(name, ".amber", "", 1)
+								name = strings.Replace(name, ".jade", "", 1)
 
 								log.Println("template updated: ", name)
 
+								/*
+									tagsI := f.GetParameter("_tags")
+									var tags template.FuncMap
+									tags = nil
+									if tagsI != nil {
+										tags = tagsI.(template.FuncMap)
+									}
+								*/
+
 								// @todo: build dependencies tree and recompile only needed files
-								templates, err := amber.CompileDir(templatesData.directory, amber.DefaultDirOptions, templatesData.compileOptions)
+								templates, err := jade.CompileDir(templatesData.directory, jade.DefaultDirOptions, templatesData.compileOptions)
 								for k, v := range templates {
+									/*if tags != nil {
+										v.Funcs(tags)
+									}*/
+
 									templatesData.compiledTemplates[k] = v
 								}
 
-								//templatesData.compiledTemplates[name], err = amber.CompileFile(ev.Name, templatesData.compileOptions)
+								//templatesData.compiledTemplates[name], err = jade.CompileFile(ev.Name, templatesData.compileOptions)
 								if err != nil {
 									log.Fatal(err)
 								}
 
 								/* show compiled template for debugging
 								 */
-								comp := amber.New()
+								comp := jade.New()
 								comp.ParseFile(ev.Name)
 								source, _ := comp.CompileString()
 								log.Println("compiled:", source)
@@ -149,4 +173,16 @@ func WatchTemplates(templatesDir string) {
 	}
 
 	//watcher.Close()
+}
+
+func (f *Floki) RegisterTag(tagName string, value interface{}) {
+	tagsI := f.GetParameter("_tags")
+	if tagsI == nil {
+		tags := template.FuncMap{}
+		tags[tagName] = value
+		f.SetParameter("_tags", tags)
+	} else {
+		tagsI.(template.FuncMap)[tagName] = value
+	}
+
 }

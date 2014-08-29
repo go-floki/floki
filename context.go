@@ -3,6 +3,7 @@ package floki
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/julienschmidt/httprouter"
 	"html/template"
 	"log"
@@ -95,15 +96,18 @@ func (c *Context) Render(tplName string, data Model) {
 			data[key] = value
 		}
 
-		tpl.Execute(c.Writer, data)
+		err := tpl.Execute(c.Writer, data)
+		if err != nil {
+			//c.Floki.Logger().Println("error:", err)
+
+			c.Send(504, fmt.Sprintf("<div>Error: <b>%s</b></div>", err))
+		}
 	}
 }
 
-func (c *Context) Json(code int, data interface{}) {
+func (c *Context) SendJson(code int, data interface{}) {
 	writer := c.Writer
-	c.Logger().Println("headers:", c.Writer.Header())
 	writer.Header().Set("Content-type", "application/json")
-	c.Logger().Println("headers:", c.Writer.Header())
 	writer.WriteHeader(code)
 
 	encoder := json.NewEncoder(writer)
