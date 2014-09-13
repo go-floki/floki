@@ -39,7 +39,7 @@ func (f *Floki) compileTemplates(templatesDir string, logger *log.Logger) map[st
 
 	if Env == Dev {
 		logger.Printf("compiled templates in %s:\n", templatesDir)
-		for tplName, tpl := range templates {
+		for tplName, _ := range templates {
 			logger.Println(tplName)
 		}
 	}
