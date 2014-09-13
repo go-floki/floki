@@ -37,7 +37,12 @@ func (f *Floki) compileTemplates(templatesDir string, logger *log.Logger) map[st
 	templatesData.directory = templatesDir
 	templatesData.compileOptions = compileOptions
 
-	logger.Printf("compiled templates in %s\n", templatesDir)
+	if Env == Dev {
+		logger.Printf("compiled templates in %s:\n", templatesDir)
+		for tplName, tpl := range templates {
+			logger.Println(tplName)
+		}
+	}
 
 	watchTemplates := f.Config.Bool("watchTemplates", true)
 	if Env == Dev && watchTemplates {
