@@ -44,10 +44,14 @@ func (f *Floki) compileTemplates(templatesDir string, logger *log.Logger) map[st
 		}
 
 		logger.Printf("files in %s:\n", templatesDir)
-		filepath.Walk(templatesDir, func(path string, f os.FileInfo, err error) error {
+		err := filepath.Walk(templatesDir, func(path string, f os.FileInfo, err error) error {
 			log.Println(path)
 			return nil
 		})
+
+		if err != nil {
+			log.Fatalln(err)
+		}
 
 	}
 
