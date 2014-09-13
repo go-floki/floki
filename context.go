@@ -102,7 +102,12 @@ func (c *Context) Render(tplName string, data Model) {
 
 			c.Send(504, fmt.Sprintf("<div>Error: <b>%s</b></div>", err))
 		}
+
+	} else {
+		c.Logger().Printf("Template %s not found\n", tplName)
+		c.Send(504, fmt.Sprintf("<div>Template not found: <b>%s</b></div>", tplName))
 	}
+
 }
 
 func (c *Context) SendJson(code int, data interface{}) {
@@ -112,8 +117,6 @@ func (c *Context) SendJson(code int, data interface{}) {
 
 	encoder := json.NewEncoder(writer)
 	encoder.Encode(data)
-
-	//_, err := writer.Write([]byte())
 }
 
 func (c *Context) Send(code int, response string) error {

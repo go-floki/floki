@@ -33,24 +33,14 @@ func (f *Floki) compileTemplates(templatesDir string, logger *log.Logger) map[st
 		panic(err)
 	}
 
-	// register tags
-	/*
-		tagsI := f.GetParameter("_tags")
-		if tagsI != nil {
-			tags := tagsI.(template.FuncMap)
-			for _, template := range templates {
-				template.Funcs(tags)
-			}
-		}
-	*/
-
 	templatesData.compiledTemplates = templates
 	templatesData.directory = templatesDir
 	templatesData.compileOptions = compileOptions
 
 	logger.Printf("compiled templates in %s\n", templatesDir)
 
-	if Env == Dev {
+	watchTemplates := f.Config.Bool("watchTemplates", true)
+	if Env == Dev && watchTemplates {
 		f.watchTemplates(templatesDir)
 	}
 
