@@ -87,7 +87,7 @@ func (f *Floki) loadConfig() {
 
 	f.triggerAppEvent("ConfigureAppEnd")
 
-	f.logger.Println("loaded config:", f.Config.Str("appRoot", "./app/"))
+	f.logger.Println("loaded config:", configFile)
 }
 
 // ServeHTTP is the HTTP Entry point for a Floki instance. Useful if you want to control your own HTTP server.
