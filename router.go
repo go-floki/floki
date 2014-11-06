@@ -1,10 +1,32 @@
 package floki
 
 import (
-	"github.com/julienschmidt/httprouter"
+	"github.com/go-floki/router"
 	"net/http"
 	"path"
+	"time"
 )
+
+type RouteHandler struct {
+	floki            *Floki
+	path             string
+	handlers         []HandlerFunc
+	handlersCombined []HandlerFunc
+}
+
+func (r RouteHandler) Handle(w http.ResponseWriter, req *http.Request, params router.Params) {
+	c := r.floki.createContext(w, req, params, r.handlersCombined)
+	c.Next()
+	c.beforeRelease()
+	r.floki.contextPool.Put(c)
+}
+
+func (r RouteHandler) HandleWithContext(c *Context, params router.Params) {
+	c2 := r.floki.createContext(c.Writer, c.Request, params, r.handlers)
+	c2.Next()
+	c2.beforeRelease()
+	r.floki.contextPool.Put(c2)
+}
 
 // Handle registers a new request handle and middlewares with the given path and method.
 // The last handler should be the real handler, the other ones should be middlewares that can and should be shared among different routes.
@@ -18,13 +40,15 @@ import (
 // communication with a proxy).
 func (group *RouterGroup) Handle(method, p string, handlers []HandlerFunc) {
 	p = path.Join(group.prefix, p)
-	handlers = group.combineHandlers(handlers)
-	group.floki.router.Handle(method, p, func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-		c := group.floki.createContext(w, req, params, handlers)
-		c.Next()
-		c.beforeRelease()
-		group.floki.contextPool.Put(c)
-	})
+
+	rh := RouteHandler{
+		group.floki,
+		p,
+		handlers,
+		group.combineHandlers(handlers),
+	}
+
+	group.floki.router.Handle(method, p, rh)
 }
 
 // POST is a shortcut for router.Handle("POST", path, handle)
@@ -75,7 +99,21 @@ func (group *RouterGroup) Static(p, root string) {
 	group.GET(p, func(c *Context) {
 		original := c.Request.URL.Path
 		c.Request.URL.Path = c.Params.ByName("filepath")
-		fileServer.ServeHTTP(c.Writer, c.Request)
+
+		writer := c.Writer
+
+		headers := writer.Header()
+
+		// in production environment static content needs to be cached by browsers & proxies
+		if Env == Prod {
+			// cache for 3 months
+			headers.Set("Expires", time.Now().AddDate(0, 3, 0).Format(http.TimeFormat))
+
+			headers.Add("Cache-Control", "public")
+			headers.Add("Cache-Control", "max-age=28771200")
+		}
+
+		fileServer.ServeHTTP(writer, c.Request)
 		c.Request.URL.Path = original
 	})
 }

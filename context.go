@@ -4,11 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/julienschmidt/httprouter"
+	"github.com/go-floki/router"
 	"html/template"
+	"io"
 	"log"
 	"math"
 	"net/http"
+	"reflect"
+	"runtime"
 )
 
 const (
@@ -22,11 +25,11 @@ const (
 )
 
 const (
-	MIMEJSON  = "application/json"
-	MIMEHTML  = "text/html"
-	MIMEXML   = "application/xml"
-	MIMEXML2  = "text/xml"
-	MIMEPlain = "text/plain"
+	MIMEJSON  = "application/json; charset=utf-8"
+	MIMEHTML  = "text/html; charset=utf-8"
+	MIMEXML   = "application/xml; charset=utf-8"
+	MIMEXML2  = "text/xml; charset=utf-8"
+	MIMEPlain = "text/plain; charset=utf-8"
 )
 
 type (
@@ -39,7 +42,7 @@ type (
 		Writer      ResponseWriter
 		Keys        map[string]interface{}
 		Errors      errorMsgs
-		Params      httprouter.Params
+		Params      router.Params
 		Floki       *Floki
 		handlers    []HandlerFunc
 		index       int8
@@ -55,6 +58,10 @@ func (c *Context) Copy() *Context {
 	return &cp
 }
 
+func getFunctionName(i interface{}) string {
+	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
+}
+
 // Next should be used only in the middlewares.
 // It executes the pending handlers in the chain inside the calling handler.
 // See example in github.
@@ -62,6 +69,7 @@ func (c *Context) Next() {
 	c.index++
 	s := int8(len(c.handlers))
 	for ; c.index < s; c.index++ {
+		//fmt.Println("executing:", getFunctionName(c.handlers[c.index]), c.Writer.Written())
 		c.handlers[c.index](c)
 	}
 }
@@ -70,10 +78,24 @@ func (c *Context) Next() {
 // For example, the first handler checks if the request is authorized. If it's not, context.Abort(401) should be called.
 // The rest of pending handlers would never be called for that request.
 func (c *Context) Abort(code int) {
+	c.Logger().Println("ABORT!")
 	if code >= 0 {
 		c.Writer.WriteHeader(code)
 	}
 	c.index = AbortIndex
+}
+
+func (c *Context) RewriteURL(newUrl string) {
+	request := c.Request
+
+	c.index = AbortIndex
+
+	handle, params, _ := c.Floki.router.Lookup(request.Method, newUrl)
+	if handle != nil {
+		(handle.(RouteHandler)).HandleWithContext(c, params)
+	} else {
+		c.Logger().Println("ERROR: failed to rewrite URL!")
+	}
 }
 
 func (c *Context) Logger() *log.Logger {
@@ -96,16 +118,39 @@ func (c *Context) Render(tplName string, data Model) {
 			data[key] = value
 		}
 
+		c.Writer.WriteHeader(200)
 		err := tpl.Execute(c.Writer, data)
 		if err != nil {
-			//c.Floki.Logger().Println("error:", err)
-
 			c.Send(504, fmt.Sprintf("<div>Error: <b>%s</b></div>", err))
 		}
 
 	} else {
 		c.Logger().Printf("Template %s not found\n", tplName)
 		c.Send(504, fmt.Sprintf("<div>Template not found: <b>%s</b></div>", tplName))
+	}
+
+}
+
+func (c *Context) RenderTo(writer io.Writer, tplName string, data interface{}) {
+	c.Writer.Header().Set("Content-Type", MIMEHTML)
+
+	templates := c.Floki.GetParameter("templates").(map[string]*template.Template)
+	tpl := templates[tplName]
+
+	if tpl != nil {
+		// populate model with context variables
+		//for key, value := range c.Keys {
+		//	data[key] = value
+		//}
+
+		err := tpl.Execute(writer, data)
+		if err != nil {
+			writer.Write([]byte(fmt.Sprintf("<div>Error: <b>%s</b></div>", err.Error())))
+		}
+
+	} else {
+		c.Logger().Printf("Template %s not found\n", tplName)
+		writer.Write([]byte(fmt.Sprintf("<div>Template not found: <b>%s</b></div>", tplName)))
 	}
 
 }
@@ -121,8 +166,15 @@ func (c *Context) SendJson(code int, data interface{}) {
 
 func (c *Context) Send(code int, response string) error {
 	writer := c.Writer
+
+	if writer.Header().Get("Content-type") == "" {
+		writer.Header().Set("Content-type", MIMEPlain)
+	}
+
 	writer.WriteHeader(code)
+
 	_, err := writer.Write([]byte(response))
+
 	return err
 }
 

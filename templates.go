@@ -90,8 +90,10 @@ func (f *Floki) watchTemplates(templatesDir string) {
 				}
 
 				if ev.IsDelete() {
-					log.Println("removing watch for", ev.Name)
-					watcher.RemoveWatch(ev.Name)
+					if _, err := os.Stat(ev.Name); os.IsNotExist(err) {
+						log.Println("removing watch for", ev.Name)
+						watcher.RemoveWatch(ev.Name)
+					}
 				}
 
 				if ev.IsModify() {

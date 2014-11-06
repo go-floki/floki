@@ -1,7 +1,7 @@
 package floki
 
 import (
-	"github.com/julienschmidt/httprouter"
+	"github.com/go-floki/router"
 	//"html/template"
 	"log"
 	"net/http"
@@ -9,6 +9,7 @@ import (
 	//"path"
 	"flag"
 	"runtime"
+	"strconv"
 	"sync"
 )
 
@@ -34,7 +35,7 @@ type (
 		logger      *log.Logger
 		params      map[string]interface{}
 		contextPool sync.Pool
-		router      *httprouter.Router
+		router      *router.Router
 		handlers404 []HandlerFunc
 
 		Config ConfigMap
@@ -61,7 +62,7 @@ func New() *Floki {
 	f.contextPool.New = func() interface{} {
 		return &Context{Floki: f, Writer: &responseWriter{}}
 	}
-	f.router = httprouter.New()
+	f.router = router.New()
 	f.router.NotFound = f.handle404
 
 	return f
@@ -130,16 +131,20 @@ func (f *Floki) SetParameter(key string, value interface{}) {
 	f.params[key] = value
 }
 
-func (f *Floki) createContext(w http.ResponseWriter, req *http.Request, params httprouter.Params, handlers []HandlerFunc) *Context {
+func (f *Floki) createContext(w http.ResponseWriter, req *http.Request, params router.Params, handlers []HandlerFunc) *Context {
 	c := f.contextPool.Get().(*Context)
 	c.Writer.reset(w)
 	c.Request = req
+	f.initContext(c, params, handlers)
+	return c
+}
+
+func (f *Floki) initContext(c *Context, params router.Params, handlers []HandlerFunc) *Context {
 	c.Params = params
 	c.handlers = handlers
 	c.Keys = nil
 	c.index = -1
 	c.beforeFuncs = nil
-
 	return c
 }
 
@@ -170,13 +175,19 @@ type Handler interface {
 }
 
 func (f *Floki) handle404(w http.ResponseWriter, req *http.Request) {
-	handlers := f.combineHandlers(f.handlers404)
+	//handlers := f.combineHandlers(f.handlers404)
+	handlers := f.handlers404
+
 	c := f.createContext(w, req, nil, handlers)
-	c.Writer.setStatus(404)
+	writer := c.Writer
+	writer.setStatus(404)
 	c.Next()
 
-	if !c.Writer.Written() {
-		c.Send(404, "<html><body><h1>Error 404</h1><p>Page not found</p></body></html>")
+	if !writer.Written() {
+		writer.Header().Set("Content-type", MIMEHTML)
+		_404response := "<html><body><h1>Error 404</h1><p>Page not found</p></body></html>"
+		writer.Header().Set("Content-length", strconv.Itoa(len(_404response)))
+		c.Send(404, _404response)
 	}
 
 	f.contextPool.Put(c)
@@ -205,8 +216,13 @@ func (f *Floki) triggerAppEvent(event string) {
 	handlers, exists := appEventHandlers[event]
 	if exists {
 		for idx := range handlers {
-			f.logger.Println("trigger handler", idx, "of event", event, handlers)
+			//f.logger.Println("trigger handler", idx, "of event", event, handlers)
 			handlers[idx](f)
 		}
 	}
+}
+
+// Adds not found handlers
+func (f *Floki) Handle404(handlers ...HandlerFunc) {
+	f.handlers404 = append(f.handlers404, handlers...)
 }
