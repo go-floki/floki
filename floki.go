@@ -2,12 +2,9 @@ package floki
 
 import (
 	"github.com/go-floki/router"
-	//"html/template"
 	"log"
 	"net/http"
 	"os"
-	//"path"
-	"flag"
 	"runtime"
 	"strconv"
 	"sync"
@@ -69,36 +66,6 @@ func New() *Floki {
 	f.router.NotFound = f.handle404
 
 	return f
-}
-
-func (f *Floki) loadConfig() {
-	logger := f.logger
-
-	f.triggerAppEvent("ConfigureAppStart")
-
-	var configFile string
-	flag.StringVar(&configFile, "config", "../app/config/"+Env+".json", "Specify application config file to use")
-	flag.Parse()
-
-	if Env == Dev {
-		logger.Println("using config file:", configFile)
-	}
-
-	err := loadConfig(configFile, &f.Config)
-	if err != nil {
-		logger.Fatal(err)
-	}
-
-	timeZoneStr := f.Config.Str("timeZone", "")
-	TimeZone, err = time.LoadLocation(timeZoneStr)
-	if err != nil {
-		logger.Println("Invalid timezone in configuration file specified:", timeZoneStr, ". Falling back to UTC")
-		TimeZone, err = time.LoadLocation("")
-	}
-
-	f.triggerAppEvent("ConfigureAppEnd")
-
-	f.logger.Println("loaded config:", configFile)
 }
 
 // ServeHTTP is the HTTP Entry point for a Floki instance. Useful if you want to control your own HTTP server.

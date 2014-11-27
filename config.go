@@ -2,12 +2,47 @@ package floki
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
+	"time"
+)
+
+var (
+	ConfigFile = flag.String("config", "./app/config/%s.json", "Specify application config file to use")
 )
 
 type ConfigMap struct {
 	data map[string]*json.RawMessage
+}
+
+func (f *Floki) loadConfig() {
+	logger := f.logger
+
+	f.triggerAppEvent("ConfigureAppStart")
+
+	flag.Parse()
+
+	configFileName := fmt.Sprintf(*ConfigFile, Env)
+	if Env == Dev {
+		logger.Println("using config file:", configFileName)
+	}
+
+	err := loadConfig(configFileName, &f.Config)
+	if err != nil {
+		logger.Fatal(err)
+	}
+
+	timeZoneStr := f.Config.Str("timeZone", "")
+	TimeZone, err = time.LoadLocation(timeZoneStr)
+	if err != nil {
+		logger.Println("Invalid timezone in configuration file specified:", timeZoneStr, ". Falling back to UTC")
+		TimeZone, err = time.LoadLocation("")
+	}
+
+	f.triggerAppEvent("ConfigureAppEnd")
+
+	f.logger.Println("loaded config:", configFileName)
 }
 
 func (c ConfigMap) Bool(key string, defaultValue bool) bool {
