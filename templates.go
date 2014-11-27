@@ -38,17 +38,6 @@ func (f *Floki) compileTemplates(templatesDir string, logger *log.Logger) map[st
 	templatesData.compileOptions = compileOptions
 
 	if Env == Dev {
-		logger.Printf("compiled templates in %s:\n", templatesDir)
-		for tplName, _ := range templates {
-			logger.Println(tplName)
-		}
-
-		logger.Printf("files in %s:\n", templatesDir)
-		err := filepath.Walk(templatesDir, func(path string, f os.FileInfo, err error) error {
-			log.Println(path)
-			return nil
-		})
-
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -76,14 +65,30 @@ func (f *Floki) watchTemplates(templatesDir string) {
 		for {
 			select {
 			case ev := <-watcher.Event:
+
+				fileCreated := false
+
 				if ev.IsCreate() {
 					info, err := os.Stat(ev.Name)
-					if err == nil && info.IsDir() {
-						log.Println("watching new directory for changes:", ev.Name)
+					if err == nil {
+						if info.IsDir() {
+							log.Println("watching new directory for changes:", ev.Name)
 
-						err = watcher.Watch(ev.Name)
-						if err != nil {
-							log.Fatal(err)
+							err = watcher.Watch(ev.Name)
+							if err != nil {
+								log.Fatal(err)
+							}
+
+						} else {
+							log.Println("watching new file for changes:", ev.Name)
+
+							err = watcher.Watch(ev.Name)
+							if err != nil {
+								log.Fatal(err)
+							}
+
+							fileCreated = true
+
 						}
 
 					}
@@ -96,13 +101,13 @@ func (f *Floki) watchTemplates(templatesDir string) {
 					}
 				}
 
-				if ev.IsModify() {
+				if ev.IsModify() || fileCreated {
 					lastUpdated, exists := updateTimes[ev.Name]
 
 					var now time.Time
 					info, err := os.Stat(ev.Name)
 					if err == nil {
-						if exists {
+						if exists || fileCreated {
 							now = info.ModTime()
 
 							secondsGone := now.Sub(lastUpdated)

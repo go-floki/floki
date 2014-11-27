@@ -11,9 +11,11 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
+	"time"
 )
 
 var appEventHandlers map[string][]AppEventHandler = make(map[string][]AppEventHandler)
+var TimeZone *time.Location
 
 type (
 	// Used internally to collect errors that occurred during an http request.
@@ -38,7 +40,8 @@ type (
 		router      *router.Router
 		handlers404 []HandlerFunc
 
-		Config ConfigMap
+		Config   ConfigMap
+		TimeZone *time.Location
 	}
 
 	// Used internally to configure router, a RouterGroup is associated with a prefix
@@ -86,6 +89,13 @@ func (f *Floki) loadConfig() {
 		logger.Fatal(err)
 	}
 
+	timeZoneStr := f.Config.Str("timeZone", "")
+	TimeZone, err = time.LoadLocation(timeZoneStr)
+	if err != nil {
+		logger.Println("Invalid timezone in configuration file specified:", timeZoneStr, ". Falling back to UTC")
+		TimeZone, err = time.LoadLocation("")
+	}
+
 	f.triggerAppEvent("ConfigureAppEnd")
 
 	f.logger.Println("loaded config:", configFile)
@@ -116,6 +126,7 @@ func (f *Floki) Run() {
 	_ = host
 
 	addr := host + ":" + port
+
 	logger.Printf("listening on %s (%s)\n", addr, Env)
 
 	if err := http.ListenAndServe(addr, f); err != nil {
