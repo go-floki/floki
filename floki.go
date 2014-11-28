@@ -55,14 +55,17 @@ type (
 
 // New creates a bare bones Floki instance. Use this method if you want to have full control over the middleware that is used.
 func New() *Floki {
-	f := &Floki{}
+	f := &Floki{
+		logger: log.New(os.Stdout, "[floki] ", 0),
+		params: make(map[string]interface{}),
+		router: router.New(),
+	}
+
 	f.RouterGroup = &RouterGroup{nil, "/", nil, f}
-	f.logger = log.New(os.Stdout, "[floki] ", 0)
-	f.params = make(map[string]interface{})
 	f.contextPool.New = func() interface{} {
 		return &Context{Floki: f, Writer: &responseWriter{}}
 	}
-	f.router = router.New()
+
 	f.router.NotFound = f.handle404
 
 	return f
@@ -81,7 +84,13 @@ func (f *Floki) Run() {
 		runtime.GOMAXPROCS(runtime.NumCPU())
 	}
 
-	tplDir := f.GetParameter("views dir").(string)
+	tplDir := "./templates"
+
+	tplDirValue := f.GetParameter("views dir")
+	if tplDirValue != nil {
+		tplDir = tplDirValue.(string)
+	}
+
 	f.SetParameter("templates", f.compileTemplates(tplDir, logger))
 
 	port := os.Getenv("PORT")

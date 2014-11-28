@@ -25,15 +25,17 @@ func (f *Floki) loadConfig() {
 
 	configFileName := fmt.Sprintf(*ConfigFile, Env)
 	if Env == Dev {
-		logger.Println("using config file:", configFileName)
+		logger.Println("Using config file:", configFileName)
 	}
 
 	err := loadConfig(configFileName, &f.Config)
 	if err != nil {
-		logger.Fatal(err)
+		logger.Fatalln("Error loading config file:", configFileName, ":", err)
 	}
 
+	// init time zone
 	timeZoneStr := f.Config.Str("timeZone", "")
+
 	TimeZone, err = time.LoadLocation(timeZoneStr)
 	if err != nil {
 		logger.Println("Invalid timezone in configuration file specified:", timeZoneStr, ". Falling back to UTC")
@@ -42,7 +44,7 @@ func (f *Floki) loadConfig() {
 
 	f.triggerAppEvent("ConfigureAppEnd")
 
-	f.logger.Println("loaded config:", configFileName)
+	logger.Println("loaded config:", configFileName)
 }
 
 func (c ConfigMap) Bool(key string, defaultValue bool) bool {
@@ -115,9 +117,6 @@ func loadConfig(filename string, o *ConfigMap) error {
 	b, err := ioutil.ReadFile(filename)
 	if err == nil {
 		err = json.Unmarshal(b, &o.data)
-
-		fmt.Println(o)
-
 		return err
 	}
 

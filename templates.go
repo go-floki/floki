@@ -24,6 +24,7 @@ func (f *Floki) compileTemplates(templatesDir string, logger *log.Logger) map[st
 		compileOptions = jade.Options{true, true}
 	} else {
 		compileOptions = jade.Options{false, false}
+		f.Logger().Printf("Compiling templates in: %s\n", templatesDir)
 	}
 
 	//
