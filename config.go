@@ -45,6 +45,12 @@ func (f *Floki) loadConfig() {
 	f.triggerAppEvent("ConfigureAppEnd")
 
 	logger.Println("loaded config:", configFileName)
+
+	// load build number
+	bnum, err := ioutil.ReadFile("build.num")
+	if err == nil {
+		f.BuildNumber = string(bnum)
+	}
 }
 
 func (c ConfigMap) Bool(key string, defaultValue bool) bool {

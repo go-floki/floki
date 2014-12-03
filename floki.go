@@ -37,8 +37,9 @@ type (
 		router      *router.Router
 		handlers404 []HandlerFunc
 
-		Config   ConfigMap
-		TimeZone *time.Location
+		Config      ConfigMap
+		TimeZone    *time.Location
+		BuildNumber string
 	}
 
 	// Used internally to configure router, a RouterGroup is associated with a prefix
