@@ -47,9 +47,14 @@ func (f *Floki) loadConfig() {
 	logger.Println("loaded config:", configFileName)
 
 	// load build number
-	bnum, err := ioutil.ReadFile("build.num")
-	if err == nil {
-		f.BuildNumber = string(bnum)
+	if Env == Prod {
+		bnum, err := ioutil.ReadFile("build.num")
+		if err == nil {
+			f.BuildNumber = string(bnum)
+		}
+
+	} else {
+		f.BuildNumber = ""
 	}
 }
 

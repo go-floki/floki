@@ -83,6 +83,18 @@ func (f *Floki) Run() {
 
 	if Env == Prod {
 		runtime.GOMAXPROCS(runtime.NumCPU())
+
+		// in Prod environment we log to file by default
+		logFile := f.Config.Str("logFile", "floki.log")
+
+		out, err := os.OpenFile(logFile, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0660)
+		if err != nil {
+			logger.Println("can't open log file", logFile, "for writing:", err)
+		} else {
+			f.logger = log.New(out, "[floki] ", 0)
+			logger = f.logger
+			log.SetOutput(out)
+		}
 	}
 
 	tplDir := "./templates"
@@ -106,7 +118,12 @@ func (f *Floki) Run() {
 
 	logger.Printf("listening on %s (%s)\n", addr, Env)
 
-	if err := http.ListenAndServe(addr, f); err != nil {
+	f.Listen(addr)
+}
+
+func (f *Floki) Listen(addr string) {
+	pidFile := f.Config.Str("pidFile", "floki.pid")
+	if err := f.listenHTTP(addr, f, pidFile); err != nil {
 		panic(err)
 	}
 }
@@ -163,7 +180,6 @@ type Handler interface {
 }
 
 func (f *Floki) handle404(w http.ResponseWriter, req *http.Request) {
-	//handlers := f.combineHandlers(f.handlers404)
 	handlers := f.handlers404
 
 	c := f.createContext(w, req, nil, handlers)
@@ -204,7 +220,6 @@ func (f *Floki) triggerAppEvent(event string) {
 	handlers, exists := appEventHandlers[event]
 	if exists {
 		for idx := range handlers {
-			//f.logger.Println("trigger handler", idx, "of event", event, handlers)
 			handlers[idx](f)
 		}
 	}
