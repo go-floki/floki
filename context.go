@@ -78,7 +78,6 @@ func (c *Context) Next() {
 // For example, the first handler checks if the request is authorized. If it's not, context.Abort(401) should be called.
 // The rest of pending handlers would never be called for that request.
 func (c *Context) Abort(code int) {
-	c.Logger().Println("ABORT!")
 	if code >= 0 {
 		c.Writer.WriteHeader(code)
 	}

@@ -81,21 +81,24 @@ func (f *Floki) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 func (f *Floki) Run() {
 	logger := f.logger
 
-	if Env == Prod {
-		runtime.GOMAXPROCS(runtime.NumCPU())
+	//if Env == Prod {
+	runtime.GOMAXPROCS(runtime.NumCPU())
 
-		// in Prod environment we log to file by default
-		logFile := f.Config.Str("logFile", "floki.log")
+	// in Prod environment we log to file by default
+	logFile := f.Config.Str("logFile", "floki.log")
 
-		out, err := os.OpenFile(logFile, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0660)
-		if err != nil {
-			logger.Println("can't open log file", logFile, "for writing:", err)
-		} else {
-			f.logger = log.New(out, "[floki] ", 0)
-			logger = f.logger
-			log.SetOutput(out)
-		}
+	out, err := os.OpenFile(logFile, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0660)
+	if err != nil {
+		logger.Println("can't open log file", logFile, "for writing:", err)
+	} else {
+		f.logger = log.New(out, "[floki] ", 0)
+		logger = f.logger
+		log.SetOutput(out)
+
+		os.Stdout = out
+		os.Stderr = out
 	}
+	//}
 
 	tplDir := "./templates"
 

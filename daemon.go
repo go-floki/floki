@@ -3,6 +3,7 @@ package floki
 import (
 	"bitbucket.org/kardianos/osext"
 	"flag"
+	"github.com/facebookgo/grace/gracehttp"
 	"io/ioutil"
 	"log"
 	"net"
@@ -17,6 +18,7 @@ import (
 )
 
 var httpWg sync.WaitGroup
+var executablePath string
 
 type gracefulListener struct {
 	net.Listener
@@ -29,6 +31,7 @@ var theListener *gracefulListener
 func (gl *gracefulListener) Accept() (c net.Conn, err error) {
 	c, err = gl.Listener.Accept()
 	if err != nil {
+		log.Println("error accepting connection:", err)
 		return
 	}
 
@@ -74,35 +77,55 @@ func (w gracefulConn) Close() error {
 
 func spawnChild(listener *gracefulListener) {
 	file := listener.File()
-	path, _ := osext.Executable()
 	args := flag.Args()
 
 	os.Setenv("FLOKI_CHILD_PROC", "1")
 
-	cmd := exec.Command(path, args...)
+	cmd := exec.Command(executablePath, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.ExtraFiles = []*os.File{file}
 
 	err := cmd.Start()
 	if err != nil {
-		log.Fatalf("gracefulRestart: Failed to launch, error: %v", err)
+		log.Fatalf("gracefulRestart: Failed to launch binary '%s', error: %v", executablePath, err)
 	}
 }
 
 var gracefulChild bool
 
 func (f *Floki) listenHTTP(addr string, handler http.Handler, pidFile string) error {
-	// in Dev & Test environments we don't need to daemonize the process
-	if Env == Dev || Env == Test {
-		return http.ListenAndServe(addr, handler)
+	go func() {
+		// wait for parent process to delete it's pid file so it won't delete ours
+		time.Sleep(time.Second * 1)
+
+		err := ioutil.WriteFile(pidFile, []byte(strconv.Itoa(syscall.Getpid())), 0660)
+		if err != nil {
+			log.Println("can't write pid to file:", pidFile, ". Error:", err)
+		}
+	}()
+
+	if true {
+		return gracehttp.Serve(
+			&http.Server{Addr: addr, Handler: handler},
+		)
 	}
+
+	// in Dev & Test environments we don't need to daemonize the process
+	/*
+		if Env == Dev || Env == Test {
+			return http.ListenAndServe(addr, handler)
+		} */
+
+	log := f.Logger()
+
+	executablePath, _ = osext.Executable()
 
 	server := &http.Server{
 		Addr:           addr,
 		Handler:        handler,
-		ReadTimeout:    60 * time.Second,
-		WriteTimeout:   60 * time.Second,
+		ReadTimeout:    1 * time.Second,
+		WriteTimeout:   1 * time.Second,
 		MaxHeaderBytes: 1 << 16}
 
 	var l net.Listener
@@ -125,12 +148,18 @@ func (f *Floki) listenHTTP(addr string, handler http.Handler, pidFile string) er
 
 	if gracefulChild {
 		parent := syscall.Getppid()
+		log.Println("killing parent:", parent)
 		syscall.Kill(parent, syscall.SIGTERM)
 
-		err := ioutil.WriteFile(pidFile, []byte(strconv.Itoa(syscall.Getpid())), 0660)
-		if err != nil {
-			log.Println("can't write pid to file:", pidFile, ". Error:", err)
-		}
+		go func() {
+			// wait for parent process to delete it's pid file so it won't delete ours
+			time.Sleep(time.Second * 1)
+
+			err := ioutil.WriteFile(pidFile, []byte(strconv.Itoa(syscall.Getpid())), 0660)
+			if err != nil {
+				log.Println("can't write pid to file:", pidFile, ". Error:", err)
+			}
+		}()
 	}
 
 	theListener = newGracefulListener(l)
@@ -143,8 +172,11 @@ func (f *Floki) listenHTTP(addr string, handler http.Handler, pidFile string) er
 	signal.Notify(c, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
 		for s := range c {
+			log.Println("got signal:", s)
+
 			switch s {
-			case syscall.SIGINT, syscall.SIGTERM:
+			case syscall.SIGTERM:
+				os.Remove(pidFile)
 				theListener.Close()
 
 				// waiting for running tasks to complete
@@ -152,7 +184,6 @@ func (f *Floki) listenHTTP(addr string, handler http.Handler, pidFile string) er
 
 				f.triggerAppEvent("Shutdown")
 
-				os.Remove(pidFile)
 				os.Exit(0)
 
 			case syscall.SIGHUP:
